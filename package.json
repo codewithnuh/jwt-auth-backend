@@ -1,0 +1,20 @@
+{
+  "name": "jwt-auth-backend",
+  "version": "1.0.0",
+  "description": "A production-grade JWT authentication API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.3",
+    "nodemon": "^3.1.10",
+    "typescript": "^5.8.3"
+  }
+}
