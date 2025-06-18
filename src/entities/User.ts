@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from "typeorm";
+import { RefreshToken } from "./RefreshToken";
 @Entity("users")
 export class User {
   @PrimaryGeneratedColumn("uuid")
@@ -15,7 +17,7 @@ export class User {
   hashedPassword!: string;
   @Column({ nullable: true }) // Optional field
   firstName?: string;
-
+  @Column({})
   @Column({ nullable: true }) // Optional field
   lastName?: string;
 
@@ -37,4 +39,6 @@ export class User {
     name: "last_login_at",
   })
   lastLoginAt?: Date;
+  @OneToMany(() => RefreshToken, (refreshToken) => refreshToken.user)
+  refreshTokens?: RefreshToken[];
 }
