@@ -4,7 +4,9 @@ import { User } from "../entities/User";
 import jwt from "jsonwebtoken";
 import { loginSchema, registerSchema } from "../schemas/authSchema";
 import { comparePassword, hashPassword } from "../utils/authUtils";
+import { RefreshToken } from "../entities/RefreshToken";
 export const userRepository = AppDataSource.getRepository(User);
+const refreshTokenRepository = AppDataSource.getRepository(RefreshToken); // Get RefreshToken repository
 // --- JWT Configuration (for demonstration, will use .env in production) ---
 // For a production app, these MUST come from environment variables and be strong random strings!
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
@@ -12,7 +14,7 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
 const ACCESS_TOKEN_EXPIRATION = "15m"; // Access tokens typically short-lived (e.g., 15 minutes)
 const REFRESH_TOKEN_EXPIRATION = "7d"; // Refresh tokens are long-lived (e.g., 7 days)
-
+const REFRESH_TOKEN_EXPIRATION_SECONDS = 200;
 // --- Helper function to generate access token ---
 const generateAccessToken = (
   userId: string,
@@ -25,10 +27,19 @@ const generateAccessToken = (
 };
 
 // --- Helper function to generate refresh token ---
-const generateRefreshToken = (userId: string, email: string): string => {
-  return jwt.sign({ userId, email }, REFRESH_TOKEN_SECRET as string, {
-    expiresIn: REFRESH_TOKEN_EXPIRATION,
-  });
+const generateRefreshTokenData = (
+  userId: string,
+  email: string
+): { token: string; expiresAt: Date } => {
+  const token = jwt.sign(
+    { userId, email },
+    process.env.REFRESH_TOKEN_SECRE as string,
+    { expiresIn: REFRESH_TOKEN_EXPIRATION_SECONDS }
+  );
+  const expiresAt = new Date(
+    Date.now() + REFRESH_TOKEN_EXPIRATION_SECONDS * 1000
+  ); // Calculate actual expiry date
+  return { token, expiresAt };
 };
 
 export class AuthService {
@@ -117,17 +128,21 @@ export class AuthService {
 
       // 4. JWT (Access Token) Generation
       const accessToken = generateAccessToken(user.id, user.email, user.roles);
-
-      // 5. Refresh Token Creation/Storage (more detailed implementation later with RefreshToken entity)
-      // For now, we'll generate it, but we need a proper database table to store and manage them.
-      // This is a placeholder. In a production app, you'd save this to the refresh_tokens table.
-      const refreshToken = generateRefreshToken(user.id, user.email);
-
+      const { token: newRefreshTokenString, expiresAt: refreshTokenExpiresAt } =
+        generateRefreshTokenData(user.id, user.email);
+      const newRefreshToken = refreshTokenRepository.create({
+        token: newRefreshTokenString,
+        userId: user.id, // Link to the user
+        expiresAt: refreshTokenExpiresAt,
+        ipAddress: req.ip, // Capture IP for auditing/security
+        userAgent: req.headers["user-agent"], // Capture User-Agent for auditing/security
+      });
+      await refreshTokenRepository.save(newRefreshToken);
       // 6. Respond with tokens
       res.json({
         message: "Logged in successfully!",
         accessToken: accessToken,
-        refreshToken: refreshToken,
+        refreshToken: newRefreshTokenString, // Send the actual token string
         user: {
           id: user.id,
           email: user.email,
@@ -140,6 +155,72 @@ export class AuthService {
       if (error instanceof Error) console.error(error.message);
       console.log(error);
       res.json({ error });
+    }
+  }
+  static async getRefreshToken(req: Request, res: Response): Promise<void> {
+    const { refreshToken } = req.body;
+    if (!refreshToken) throw new Error("Refresh Token not found");
+    try {
+      const decoded = jwt.verify(
+        refreshToken,
+        REFRESH_TOKEN_SECRET as string
+      ) as { userId: string; email: string; iat: number; exp: number };
+      const storedRefreshToken = await refreshTokenRepository.findOne({
+        where: {
+          token: refreshToken,
+        },
+        relations: ["user"],
+      });
+      if (!storedRefreshToken) throw new Error("No Refresh Token found");
+      if (!storedRefreshToken.user) {
+        res
+          .status(401)
+          .json({ message: "User associated with refresh token not found." });
+      }
+      if (
+        !storedRefreshToken ||
+        storedRefreshToken.revokedAt ||
+        storedRefreshToken.expiresAt < new Date()
+      ) {
+        // If token not found, revoked, or expired in DB, unauthorized
+        res.status(401).json({ message: "Invalid or revoked refresh token." });
+      }
+      if (refreshToken.userId != storedRefreshToken?.userId)
+        res.status(401).json({ message: "Invalid refresh token" });
+      if (decoded.userId != storedRefreshToken?.userId)
+        res.status(401).json({ message: " Invalid refresh token" });
+      storedRefreshToken.revokedAt = new Date();
+      await refreshTokenRepository.save(storedRefreshToken!);
+      const newAccessToken = generateAccessToken(
+        storedRefreshToken.user.id,
+        storedRefreshToken.user.email,
+        storedRefreshToken.user.roles
+      );
+      const {
+        token: newRefreshTokenString,
+        expiresAt: newRefreshTokenExpiresAt,
+      } = generateRefreshTokenData(
+        storedRefreshToken.user.id,
+        storedRefreshToken.user.email
+      );
+
+      // 6. Store the new refresh token in the database
+      const newStoredRefreshToken = refreshTokenRepository.create({
+        token: newRefreshTokenString,
+        userId: storedRefreshToken.user.id,
+        expiresAt: newRefreshTokenExpiresAt,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+      await refreshTokenRepository.save(newStoredRefreshToken);
+
+      // 7. Send new tokens to client
+      res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRefreshTokenString,
+      });
+    } catch (error) {
+      if (error instanceof Error) res.status(400).json(error.message);
     }
   }
 }
