@@ -15,7 +15,7 @@ export class RefreshToken {
   @Column({ unique: true })
   token!: string;
   @ManyToOne(() => User, (user) => user.refreshTokens, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "user_id" })
+  @JoinColumn({ name: "id" })
   user!: User;
   @Column({ name: "user_id", type: "uuid" }) // Store the user's UUID
   userId!: string; // This property is useful for direct access without loading the full User object

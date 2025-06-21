@@ -12,9 +12,8 @@ const refreshTokenRepository = AppDataSource.getRepository(RefreshToken); // Get
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
-const ACCESS_TOKEN_EXPIRATION = "15m"; // Access tokens typically short-lived (e.g., 15 minutes)
-const REFRESH_TOKEN_EXPIRATION = "7d"; // Refresh tokens are long-lived (e.g., 7 days)
-const REFRESH_TOKEN_EXPIRATION_SECONDS = 200;
+const ACCESS_TOKEN_EXPIRATION = "1m"; // Access tokens typically short-lived (e.g., 15 minutes) // Refresh tokens are long-lived (e.g., 7 days)
+const REFRESH_TOKEN_EXPIRATION_SECONDS = 7 * 24 * 60 * 60;
 // --- Helper function to generate access token ---
 const generateAccessToken = (
   userId: string,
@@ -33,7 +32,7 @@ const generateRefreshTokenData = (
 ): { token: string; expiresAt: Date } => {
   const token = jwt.sign(
     { userId, email },
-    process.env.REFRESH_TOKEN_SECRE as string,
+    process.env.REFRESH_TOKEN_SECRET as string,
     { expiresIn: REFRESH_TOKEN_EXPIRATION_SECONDS }
   );
   const expiresAt = new Date(
@@ -128,9 +127,11 @@ export class AuthService {
 
       // 4. JWT (Access Token) Generation
       const accessToken = generateAccessToken(user.id, user.email, user.roles);
+
       const { token: newRefreshTokenString, expiresAt: refreshTokenExpiresAt } =
         generateRefreshTokenData(user.id, user.email);
       const newRefreshToken = refreshTokenRepository.create({
+        user,
         token: newRefreshTokenString,
         userId: user.id, // Link to the user
         expiresAt: refreshTokenExpiresAt,
@@ -169,7 +170,7 @@ export class AuthService {
         where: {
           token: refreshToken,
         },
-        relations: ["user"],
+        relations: ["users"],
       });
       if (!storedRefreshToken) throw new Error("No Refresh Token found");
       if (!storedRefreshToken.user) {
