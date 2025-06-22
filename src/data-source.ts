@@ -16,7 +16,8 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || "jwt_db",
   synchronize: true, // Set to true for dev, false for production
   logging: process.env.NODE_ENV === "development" ? ["query", "error"] : false, // Log SQL queries in dev
-  entities: [User, RefreshToken], // Register your entities here
+  entities: [User, RefreshToken],
+  relationLoadStrategy: "join", // Register your entities here
   migrations: [], // We'll talk about migrations later for production
   subscribers: [],
 });

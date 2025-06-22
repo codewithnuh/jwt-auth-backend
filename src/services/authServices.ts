@@ -130,6 +130,7 @@ export class AuthService {
 
       const { token: newRefreshTokenString, expiresAt: refreshTokenExpiresAt } =
         generateRefreshTokenData(user.id, user.email);
+
       const newRefreshToken = refreshTokenRepository.create({
         user,
         token: newRefreshTokenString,
@@ -138,7 +139,9 @@ export class AuthService {
         ipAddress: req.ip, // Capture IP for auditing/security
         userAgent: req.headers["user-agent"], // Capture User-Agent for auditing/security
       });
+
       await refreshTokenRepository.save(newRefreshToken);
+
       // 6. Respond with tokens
       res.json({
         message: "Logged in successfully!",
@@ -160,31 +163,38 @@ export class AuthService {
   }
   static async getRefreshToken(req: Request, res: Response): Promise<void> {
     const { refreshToken } = req.body;
+
     if (!refreshToken) throw new Error("Refresh Token not found");
     try {
       const decoded = jwt.verify(
         refreshToken,
         REFRESH_TOKEN_SECRET as string
       ) as { userId: string; email: string; iat: number; exp: number };
+      console.log({ refreshToken });
+      console.log(decoded.userId);
       const storedRefreshToken = await refreshTokenRepository.findOne({
         where: {
-          token: refreshToken,
+          userId: decoded.userId,
         },
-        relations: ["users"],
+        // relations: ["users"],
       });
+      console.log({ storedRefreshToken });
       if (!storedRefreshToken) throw new Error("No Refresh Token found");
-      if (!storedRefreshToken.user) {
+      if (!storedRefreshToken.userId) {
         res
           .status(401)
           .json({ message: "User associated with refresh token not found." });
+        return;
       }
       if (
         !storedRefreshToken ||
         storedRefreshToken.revokedAt ||
-        storedRefreshToken.expiresAt < new Date()
+        storedRefreshToken?.expiresAt < new Date()
       ) {
         // If token not found, revoked, or expired in DB, unauthorized
-        res.status(401).json({ message: "Invalid or revoked refresh token." });
+        res.status(401).json({
+          message: "Invalid or revoked refresh token. Please login again",
+        });
       }
       if (refreshToken.userId != storedRefreshToken?.userId)
         res.status(401).json({ message: "Invalid refresh token" });
@@ -192,6 +202,7 @@ export class AuthService {
         res.status(401).json({ message: " Invalid refresh token" });
       storedRefreshToken.revokedAt = new Date();
       await refreshTokenRepository.save(storedRefreshToken!);
+
       const newAccessToken = generateAccessToken(
         storedRefreshToken.user.id,
         storedRefreshToken.user.email,
@@ -221,6 +232,7 @@ export class AuthService {
         refreshToken: newRefreshTokenString,
       });
     } catch (error) {
+      console.error(error);
       if (error instanceof Error) res.status(400).json(error.message);
     }
   }
