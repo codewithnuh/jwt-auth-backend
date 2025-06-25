@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/app.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "src/app.ts"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "ACCESS_TOKEN_SECRET": "@access_token_secret",
+    "REFRESH_TOKEN_SECRET": "@refresh_token_secret",
+    "DATABASE_URL": "@database_url",
+    "RUN_LOCAL": "false"
+  }
+}

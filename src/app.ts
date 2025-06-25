@@ -6,6 +6,7 @@ import { initializeDataSource } from "./data-source"; // Import the database ini
 import userRoutes from "./routes/userRoutes";
 import authRoutes from "./routes/authRoutes";
 import { errorHandler } from "./middlewares/errorHandler";
+import serverlessExpress from "serverless-http"; // The adapter!
 // Load environment variables from .env file
 dotenv.config();
 // Function to check for required environment variables

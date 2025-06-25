@@ -20,6 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.0",
     "reflect-metadata": "^0.2.2",
+    "serverless-http": "^3.2.0",
     "typeorm": "^0.3.24",
     "zod": "^3.25.67"
   },
