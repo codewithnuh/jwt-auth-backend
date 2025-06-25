@@ -220,6 +220,7 @@ export class AuthService {
         },
         relations: ["user"], // Eagerly load the User entity associated with this refresh token
       });
+      console.log(storedRefreshToken);
 
       console.log(
         "Debug: Stored Refresh Token found:",
@@ -300,6 +301,7 @@ export class AuthService {
     } catch (error) {
       if (error instanceof jwt.JsonWebTokenError) {
         console.error("JWT Error in getRefreshToken:", error.message);
+        console.error(error);
         res
           .status(401)
           .json({ message: "Invalid or malformed refresh token." });
