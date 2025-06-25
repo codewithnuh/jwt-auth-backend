@@ -5,6 +5,7 @@ import dotenv from "dotenv"; // Import dotenv
 import { initializeDataSource } from "./data-source"; // Import the database initializer
 import userRoutes from "./routes/userRoutes";
 import authRoutes from "./routes/authRoutes";
+import { errorHandler } from "./middlewares/errorHandler";
 // Load environment variables from .env file
 dotenv.config();
 // Function to check for required environment variables
@@ -67,11 +68,7 @@ app.get("/", (req: Request, res: Response) => {
   res.json({ message: "Welcome to the main API entry point!" });
 });
 
-// Error Handling Middleware (must be last)
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
-});
+app.use(errorHandler);
 // Initialize database connection and then start the server
 initializeDataSource()
   .then(() => {

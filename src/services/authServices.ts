@@ -6,6 +6,7 @@ import { loginSchema, registerSchema } from "../schemas/authSchema";
 import { comparePassword, hashPassword } from "../utils/authUtils";
 import { RefreshToken } from "../entities/RefreshToken"; // Ensure this import is correct
 import { MoreThan, IsNull } from "typeorm";
+import { AuthenticationError } from "../errors/customErrors";
 
 // Extend the Request interface to include the 'user' property
 declare global {
@@ -114,7 +115,11 @@ export class AuthService {
     }
   }
 
-  static async login(req: Request, res: Response): Promise<void> {
+  static async login(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const validationResult = loginSchema.safeParse(req.body);
       if (!validationResult.success) {
@@ -129,7 +134,7 @@ export class AuthService {
       const user = await userRepository.findOneBy({ email });
       if (!user) {
         // Be generic with error messages to avoid leaking information (e.g., "email not found")
-        res.status(401).json({ message: "Invalid credentials" });
+        next(new AuthenticationError("Invalid credentials"));
         return;
       }
 
@@ -139,7 +144,7 @@ export class AuthService {
         user.hashedPassword
       );
       if (!isPasswordValid) {
-        res.status(401).json({ message: "Invalid credentials" });
+        next(new AuthenticationError("Invalid credentials"));
         return;
       }
 

@@ -1,58 +1,62 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import {
+  AuthenticationError,
+  AuthorizationError,
+} from "../errors/customErrors"; // Import custom errors
 
-dotenv.config(); // Load environment variables
+dotenv.config();
+const ACCESS_TOKEN_SECRET =
+  process.env.ACCESS_TOKEN_SECRET || "supersecretaccesskey";
 
-// Extend the Express Request interface to include the user property
-// This allows us to attach user information to the request object after authentication
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        userId: string;
-        email: string;
-        roles: string[];
-      };
-    }
-  }
-}
-// Ensure your ACCESS_TOKEN_SECRET matches what's in your .env
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 export const authenticateToken = (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  console.log("[DEBUg]: Auth middleware");
-  // 1. Extract the token from the Authorization header
-  // The header typically looks like: "Authorization: Bearer <TOKEN>"
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1]; // Get the token part after "Bearer "
+  const token = authHeader && authHeader.split(" ")[1];
 
   if (token == null) {
-    // If no token is provided, return 401 Unauthorized
-    return res
-      .status(401)
-      .json({ message: "Access Denied: No token provided" });
+    // Instead of res.status(401).json(...), throw an error
+    return next(new AuthenticationError("No authentication token provided."));
   }
 
-  // 2. Verify the token
-  jwt.verify(token, ACCESS_TOKEN_SECRET as string, (err, user) => {
+  jwt.verify(token, ACCESS_TOKEN_SECRET, (err, user) => {
     if (err) {
-      // If token is invalid or expired, return 403 Forbidden
-      // 'JsonWebTokenError' for invalid signature, 'TokenExpiredError' for expired token
-      console.error("JWT Verification Error:", err.message);
-      return res
-        .status(403)
-        .json({ message: "Access Denied: Invalid or expired token" });
+      // JWT errors (expired, invalid signature) will be caught by the main errorHandler
+      // We still pass the original JWT error for granular handling in errorHandler
+      return next(err);
     }
-
-    // 3. Attach user information to the request object
-    // Cast 'user' to the expected type that matches our JWT payload structure
-    req.user = user as { userId: string; email: string; roles: string[] };
-
-    // 4. Pass control to the next middleware or route handler
+    req.user = user as { id: string; email: string; roles: string[] };
     next();
   });
+};
+
+export const authorizeRoles = (requiredRoles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return next(
+        new AuthenticationError(
+          "User not authenticated for authorization check."
+        )
+      );
+    }
+
+    const hasPermission = requiredRoles.some((role) =>
+      req.user!.roles.includes(role)
+    );
+
+    if (hasPermission) {
+      next();
+    } else {
+      // Instead of res.status(403).json(...), throw an error
+      next(
+        new AuthorizationError(
+          "You do not have the necessary permissions to access this resource."
+        )
+      );
+    }
+  };
 };
